@@ -7,8 +7,11 @@ Imports System.Windows
 Imports System.Windows.Forms.VisualStyles
 Imports InputHelper.EventArgs
 Imports InputHelperLib
+Imports Microsoft.Win32
+Imports SharpHook
 
 Public Class MainForm
+
     Public Sub New()
         InitializeComponent()
         'timer1.Start()  ' Processing events from Hooks involves message queue complexities.
@@ -21,13 +24,26 @@ Public Class MainForm
         AddHandler MouseHook.MouseWheel, AddressOf MouseHook_MouseDown
         AddHandler KeyboardHook.KeyDown, AddressOf KeyboardHook_KeyDown
         AddHandler KeyboardHook.KeyUp, AddressOf KeyboardHook_KeyUp
+
+        'Dim dpi1 = Registry.GetValue("HKEY_CURRENT_USER\\Control Panel\\Desktop", "LogPixels", 96)
+        'Dim dpi3 = Registry.GetValue("HKEY_CURRENT_USER\\Control Panel\\Desktop\\WindowMetrics", "AppliedDPI", 0)
+
+        If (Environment.OSVersion.Version.Major > 6) Then
+            SetProcessDPIAware()
+        End If
+        Try
+            Dim dpi = Registry.GetValue("HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\ThemeManager", "LastLoadedDPI", "96")
+            screenScale = 96 / CSng(dpi)
+        Catch ex As Exception
+            screenScale = 1
+        End Try
+
     End Sub
     Protected Overrides Sub SetVisibleCore(ByVal value As Boolean)
         If Not Me.IsHandleCreated Then
             Me.CreateHandle()
             value = False
         End If
-
         MyBase.SetVisibleCore(value)
     End Sub
 
@@ -39,10 +55,10 @@ Public Class MainForm
 
 #Region "Data Members & Structures "
 
-
-    'Private WithEvents kbHook As New KeyboardHook
     Dim MouseHook As New InputHelper.Hooks.MouseHook
     Dim KeyboardHook As New InputHelper.Hooks.KeyboardHook
+
+
 
     <StructLayout(LayoutKind.Sequential)>    ' Required by user32.dll
     Public Structure RECT
@@ -50,6 +66,13 @@ Public Class MainForm
         Public Top As UInteger
         Public Right As UInteger
         Public Bottom As UInteger
+    End Structure
+
+    Public Structure CopyDataStruct
+        Public dwData As IntPtr
+        Public cbData As Integer
+        <MarshalAs(UnmanagedType.LPStr)>
+        Public lpData As String
     End Structure
 
     <StructLayout(LayoutKind.Sequential)>    ' Required by user32.dll
@@ -88,6 +111,7 @@ Public Class MainForm
     Private targetAppName As String = ""
     Private currentWord As String = ""                      'store the current word in typing
     Private prevTime As DateTime
+    Private screenScale As Single = 1
 
 
 #End Region
@@ -138,11 +162,35 @@ Public Class MainForm
     Private Shared Function BringWindowToTop(ByVal hwnd As IntPtr) As Boolean
     End Function
 
+    <DllImport("user32.dll")>
+    Private Shared Function SetProcessDPIAware() As Boolean
+    End Function
+
+    <DllImport("User32.dll", EntryPoint:="FindWindow")>
+    Private Shared Function FindWindow(ByVal lpClassName As String, ByVal lpWindowName As String) As Integer
+    End Function
+    <DllImport("User32.dll", EntryPoint:="SendMessage")>
+    Private Shared Function SendMessage(ByVal hWnd As Integer, ByVal Msg As Integer, ByVal wParam As Integer, ByRef lParam As CopyDataStruct) As Integer
+    End Function
+
+    Private Declare Auto Function FindWindowEx Lib "user32.dll" (
+ByVal hwndParent As IntPtr,
+ByVal hwndChildAfter As IntPtr,
+ByVal lpszClass As String,
+ByVal lpszWindow As String
+) As IntPtr
+
+    Const WM_SETTEXT As Integer = &HC
+    Const WM_KEYDOWN = &H100
+    Const WM_KEYUP = &H101
+    Const WM_SYSKEYDOWN = &H104
+    Const WM_SYSKEYUP = &H105
+    Const WM_COPYDATA As Integer = &H4A
 
 #End Region
 
 #Region "Event Handlers "
-    Private Sub KeyboardHook_KeyDown(sender As Object, e As KeyboardHookEventArgs)
+    Private Sub KeyboardHook_KeyDown(sender As Object, e As InputHelper.EventArgs.KeyboardHookEventArgs)
         'Console.WriteLine(KeyCodeToChar.GetKeyString(e.KeyCode, e.Modifiers))
 
         Dim hWnd As IntPtr = GetForegroundWindow()
@@ -161,8 +209,11 @@ Public Class MainForm
                 DBManager.AddorUpdateWord(currentWord.ToLower(), targetAppName)
             End If
             Visible = False
-            currentWord = ""    'reset current word , assuming new word would be begun.
-            suggestionList.stringToFind = ""
+            currentWord = ""
+            suggestionWord.StringToFind = ""
+            suggestionWord.words = New List(Of String)
+            suggestionWord.SelectedIndex = -1
+
             Return
         End If
 
@@ -172,19 +223,45 @@ Public Class MainForm
             Dim c As Char = Chr(e.KeyCode)
 
             If c >= "A"c AndAlso c <= "Z"c Then
+
                 currentWord = currentWord + c
-                suggestionList.stringToFind = currentWord.ToLower()
+                suggestionWord.StringToFind = currentWord.ToLower()
                 UpdateSuggestionWordList(300)
                 Console.WriteLine("current word is {0}", currentWord)
             Else
                 currentWord = ""
-                suggestionList.stringToFind = currentWord.ToLower()
+                suggestionWord.StringToFind = currentWord.ToLower()
             End If
+
+
 
         Else
             If (e.KeyCode = Keys.Down Or e.KeyCode = Keys.Up) And Visible Then
                 ForceForegroundWindow(Handle)
             End If
+
+            'In the case the key was pressed on targetApp
+            If hWnd <> Handle Then
+                If suggestionWord.SelectedIndex >= 0 And (e.KeyCode = Keys.Tab Or e.KeyCode = Keys.Enter Or e.KeyCode = Keys.Right) Then
+                    Console.WriteLine("Key {0} was pressed outside Predicto", e.KeyCode)
+                    e.Block = True
+                    Dim selecteItem = suggestionWord.words(suggestionWord.SelectedIndex)
+                    If selecteItem IsNot Nothing Then
+                        Dim selectedString = selecteItem.ToString()
+                        If currentWord.Length < selectedString.Length Then
+                            Dim stringToSend As String = selectedString.Substring(currentWord.Length)
+                            'My.Computer.Keyboard.SendKeys(stringToSend, True)
+                            SendKeys.Send(stringToSend)
+                            currentWord = ""
+                        End If
+                    End If
+                End If
+                If e.KeyCode = Keys.Escape Then
+                    Visible = False
+
+                End If
+            End If
+
             Return
         End If
 
@@ -198,7 +275,7 @@ Public Class MainForm
             ' Dissappear Tooltip
             Visible = False
         Else
-            ' Otherwise Calculate Caret positiondfsefsfesfse
+            ' Otherwise Calculate Caret position
             EvaluateCaretPosition()
             If caretPosition.X = 0 And caretPosition.Y = 0 Then
                 Visible = False
@@ -214,17 +291,22 @@ Public Class MainForm
 
         End If
     End Sub
-    Private Sub KeyboardHook_KeyUp(sender As Object, e As KeyboardHookEventArgs)
+    Private Sub KeyboardHook_KeyUp(sender As Object, e As InputHelper.EventArgs.KeyboardHookEventArgs)
         Dim hWnd As IntPtr = GetForegroundWindow()
+
         ' If Tooltip window is active window (Suppose user clicks on the Tooltip Window)
         If hWnd = Handle Then
-            If e.KeyCode = Keys.Tab Or e.KeyCode = Keys.Enter Then
+            Console.WriteLine("Key {0} was pressed in Predicto", e.KeyCode)
+
+            If suggestionWord.SelectedIndex >= 0 And (e.KeyCode = Keys.Tab Or e.KeyCode = Keys.Enter Or e.KeyCode = Keys.Right) Then
                 ForceForegroundWindow(targetAppHandle)
-                Dim selectedString = suggestionList.SelectedItem.ToString()
+                Dim selectedString = suggestionWord.words(suggestionWord.SelectedIndex)
                 If selectedString <> "" Then
                     If currentWord.Length < selectedString.Length Then
                         Dim stringToSend As String = selectedString.Substring(currentWord.Length)
-                        My.Computer.Keyboard.SendKeys(stringToSend, True)
+
+                        SendKeys.Send(stringToSend)
+                        'My.Computer.Keyboard.SendKeys(stringToSend, True)
                         DBManager.AddorUpdateWord(selectedString, targetAppName)
                         Console.WriteLine("Updated {0} to db", selectedString.ToLower())
                     End If
@@ -232,21 +314,32 @@ Public Class MainForm
                 End If
 
             End If
-            Return
+            If e.KeyCode = Keys.Down Or e.KeyCode = Keys.Up Then
+                If suggestionWord.words.Count = 0 Then Return
+                suggestionWord.Select()
+                If e.KeyCode = Keys.Down Then
+                    suggestionWord.SelectedIndex = suggestionWord.SelectedIndex + 1
+                    If suggestionWord.SelectedIndex >= suggestionWord.words.Count Then suggestionWord.SelectedIndex = 0
+                End If
+                If e.KeyCode = Keys.Up Then
+                    suggestionWord.SelectedIndex = suggestionWord.SelectedIndex - 1
+                    If suggestionWord.SelectedIndex < 0 Then suggestionWord.SelectedIndex = suggestionWord.words.Count - 1
+                End If
+            End If
         Else
-            'The forcus is on other app( target app)
+            'The forcus is on target app (for example notepad)
             targetAppHandle = hWnd
             If e.KeyCode = Keys.Back Then
                 If currentWord.Length >= 1 Then
                     currentWord = currentWord.Substring(0, currentWord.Length - 1)
-                    suggestionList.stringToFind = currentWord.ToLower()
-
+                    suggestionWord.StringToFind = currentWord.ToLower()
                     UpdateSuggestionWordList(300)
                 End If
             End If
+
         End If
     End Sub
-    Private Sub MouseHook_MouseDown(sender As Object, e As MouseHookEventArgs)
+    Private Sub MouseHook_MouseDown(sender As Object, e As InputHelper.EventArgs.MouseHookEventArgs)
         If GetForegroundWindow() = Handle Then
             ' then do no processing
             Return
@@ -256,32 +349,36 @@ Public Class MainForm
 
     End Sub
 
-    Private Sub suggestionList_MouseEnter(sender As Object, e As EventArgs) Handles suggestionList.MouseEnter
-        ' Set the Mouse Cursor
-        Cursor = Cursors.SizeAll
-    End Sub
+    'Private Sub suggestionList_MouseEnter(sender As Object, e As EventArgs)
+    '    ' Set the Mouse Cursor
+    '    Cursor = Cursors.SizeAll
+    'End Sub
 
-    Private Sub suggestionList_MouseMove(sender As Object, e As MouseEventArgs) Handles suggestionList.MouseMove
-        ' If Left Button was pressed
-        If e.Button = MouseButtons.Left Then
-            ' then move the Tooltip
-            Left += e.Location.X - startPosition.X
-            Top += e.Location.Y - startPosition.Y
-        End If
-    End Sub
+    'Private Sub suggestionList_MouseMove(sender As Object, e As MouseEventArgs)
+    '    ' If Left Button was pressed
+    '    If e.Button = MouseButtons.Left Then
+    '        ' then move the Tooltip
+    '        Left += e.Location.X - startPosition.X
+    '        Top += e.Location.Y - startPosition.Y
+    '    End If
+    'End Sub
 
-    Private Sub suggestionList_MouseDown(sender As Object, e As MouseEventArgs) Handles suggestionList.MouseDown
-        ' Store start position of mouse when clicked down.
-        ' It will be used to calculate offset during movement.
-        startPosition = e.Location
-    End Sub
+    'Private Sub suggestionList_MouseDown(sender As Object, e As MouseEventArgs)
+    '    ' Store start position of mouse when clicked down.
+    '    ' It will be used to calculate offset during movement.
+    '    startPosition = e.Location
+    'End Sub
 
 
 #End Region
 
 #Region "Methods "
 
-    ' Update Suggestion List words with the found from db, delays 300ms, so it does not retrieve db for every keystroke
+    ''' <summary>
+    ''' Update Suggestion List words with the found from db, delays 300ms,
+    '''  so it does not retrieve db for every keystroke
+    ''' </summary>
+
     Private Sub UpdateSuggestionWordList(delay As Integer)
         Dim tmpWord = currentWord
         Dim delayTask As Task = Task.Delay(delay) ' delay milliseconds
@@ -291,12 +388,24 @@ Public Class MainForm
                                        Dim searched = DBManager.SearchWord(currentWord.ToLower())
                                        Console.WriteLine("found {0}", searched.Count)
                                        Me.Invoke(Sub()
-                                                     suggestionList.Items.Clear()
-                                                     For Each item In searched
-                                                         suggestionList.Items.Add(item.Content)
-                                                     Next
+                                                     Dim searchedWords As List(Of String) = New List(Of String)()
 
-                                                     suggestionList.Height = suggestionList.ItemHeight * searched.Count
+                                                     For Each item In searched
+                                                         searchedWords.Add(item.Content)
+                                                     Next
+                                                     If searched.Count > 0 Then
+                                                         suggestionWord.SelectedIndex = 0
+                                                         Me.Height = searched.Count * suggestionWord.LineHeight + 10
+                                                         suggestionWord.Height = searched.Count * suggestionWord.LineHeight
+                                                         Me.Show()
+                                                     Else
+                                                         suggestionWord.SelectedIndex = -1
+                                                         Me.Hide()
+                                                     End If
+
+
+                                                     suggestionWord.words = searchedWords
+                                                     suggestionWord.StringToFind = currentWord.ToLower()
 
 
 
@@ -305,6 +414,10 @@ Public Class MainForm
                                    End If
                                End Sub)
     End Sub
+    ''' <summary>
+    ''' This will bring a window to top of the screen, so it has focus, can get key events.
+    ''' 
+    ''' </summary>
     Private Sub ForceForegroundWindow(hWnd As IntPtr)
 
         Dim foreThread As UInteger = GetWindowThreadProcessId(GetForegroundWindow(), IntPtr.Zero)
@@ -338,7 +451,7 @@ Public Class MainForm
         If caretPosition.Y + Height > workingArea.Height Then
             caretPosition.Y = caretPosition.Y - Height - 50
         End If
-
+        Console.WriteLine("Caret Position {0} {1}", caretPosition.X, caretPosition.Y)
         Left = caretPosition.X
         Top = caretPosition.Y
     End Sub
@@ -352,9 +465,8 @@ Public Class MainForm
         ' Fetch GUITHREADINFO
         GetCaretPosition()
 
-        caretPosition.X = CInt(guiInfo.rcCaret.Left) + 10
-        caretPosition.Y = CInt(guiInfo.rcCaret.Bottom)
-        Console.WriteLine("caretPosition {0} {1}", caretPosition.X, caretPosition.Y)
+        caretPosition.X = CInt(guiInfo.rcCaret.Left * screenScale) + 10
+        caretPosition.Y = CInt(guiInfo.rcCaret.Bottom * screenScale)
         ClientToScreen(guiInfo.hwndCaret, caretPosition)
 
         'txtCaretX.Text = caretPosition.X.ToString()
@@ -395,17 +507,19 @@ Public Class MainForm
     End Function
 
     Private Sub MainForm_Load(sender As Object, e As EventArgs) Handles MyBase.Load
-        Me.ActiveControl = Nothing
-        Visible = False
-        suggestionList.stringToFind = ""
+        Me.KeyPreview = True
+        'Me.ActiveControl = Nothing
+        'Visible = False
+        suggestionWord.StringToFind = ""
     End Sub
 
-    'Private Sub predictList_KeyPress(sender As Object, e As KeyPressEventArgs) Handles predictList.KeyPress
-    '    Console.WriteLine("Key Pressed on List", e.KeyChar)
-    'End Sub
 
     Private Sub MainForm_KeyPress(sender As Object, e As KeyPressEventArgs) Handles MyBase.KeyPress
-        Console.WriteLine("Key Pressed on Form", e.KeyChar)
+        Console.WriteLine("Key Pressed on Form {0}", e.KeyChar)
+    End Sub
+
+    Private Sub MainForm_KeyDown(sender As Object, e As KeyEventArgs) Handles MyBase.KeyDown
+        Console.WriteLine("Key Down on form {0}", e.KeyCode)
     End Sub
 
 

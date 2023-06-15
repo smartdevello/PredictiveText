@@ -1,6 +1,7 @@
 ﻿Imports System
 Imports System.Collections.Generic
 Imports System.Drawing
+Imports System.Drawing.Drawing2D
 Imports System.Linq
 Imports System.Runtime.InteropServices
 Imports System.Text
@@ -41,6 +42,10 @@ Partial Public Class SuggestionList
 
     Protected Overrides Sub OnPaint(ByVal e As PaintEventArgs)
         Dim g = e.Graphics
+        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit
+        'g.SmoothingMode = SmoothingMode.AntiAlias
+        'g.InterpolationMode = InterpolationMode.HighQualityBilinear
+
         Dim rec = ClientRectangle
         Dim hdc As IntPtr = g.GetHdc()
         DrawThemeParentBackground(Me.Handle, hdc, rec)
@@ -70,9 +75,14 @@ Partial Public Class SuggestionList
 
     Protected Overrides Sub OnDrawItem(ByVal e As DrawItemEventArgs)
         If e.Index < 0 Then Return
+
+
         Dim rec = e.Bounds
         Dim g = e.Graphics
+
         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias
+        'g.SmoothingMode = SmoothingMode.AntiAlias
+        'g.InterpolationMode = InterpolationMode.HighQualityBilinear
 
         If (e.State And DrawItemState.Selected) = DrawItemState.Selected Then
             rec.Y = rec.Y + 2
@@ -84,9 +94,6 @@ Partial Public Class SuggestionList
         If Not String.IsNullOrEmpty(stringToFind) Then
 
             Dim MyString As String = GetItemText(Items(e.Index))
-            Console.WriteLine("String To Find is {0}", stringToFind)
-            Console.WriteLine("Item Text {0}", MyString)
-
             Dim strings As String() = MyString.Split(New String() {stringToFind}, StringSplitOptions.None)
             Dim rect As Rectangle = e.Bounds
 

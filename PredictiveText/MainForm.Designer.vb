@@ -22,24 +22,24 @@ Partial Class MainForm
     'Do not modify it using the code editor.
     <System.Diagnostics.DebuggerStepThrough()>
     Private Sub InitializeComponent()
-        Me.suggestionList = New Predicto.SuggestionList()
+        Dim resources As System.ComponentModel.ComponentResourceManager = New System.ComponentModel.ComponentResourceManager(GetType(MainForm))
+        Me.suggestionWord = New Predicto.SuggestionWord()
         Me.SuspendLayout()
         '
-        'suggestionList
+        'suggestionWord
         '
-        Me.suggestionList.Anchor = CType(((System.Windows.Forms.AnchorStyles.Top Or System.Windows.Forms.AnchorStyles.Left) _
-            Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
-        Me.suggestionList.BorderStyle = System.Windows.Forms.BorderStyle.None
-        Me.suggestionList.DrawMode = System.Windows.Forms.DrawMode.OwnerDrawFixed
-        Me.suggestionList.Font = New System.Drawing.Font("Consolas", 11.25!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
-        Me.suggestionList.FormattingEnabled = True
-        Me.suggestionList.ItemHeight = 15
-        Me.suggestionList.Location = New System.Drawing.Point(0, 2)
-        Me.suggestionList.MatchedForeColor = System.Drawing.Color.FromArgb(CType(CType(166, Byte), Integer), CType(CType(216, Byte), Integer), CType(CType(255, Byte), Integer))
-        Me.suggestionList.Name = "suggestionList"
-        Me.suggestionList.SelectionBackColor = System.Drawing.Color.DarkOrange
-        Me.suggestionList.Size = New System.Drawing.Size(191, 90)
-        Me.suggestionList.TabIndex = 0
+        Me.suggestionWord.Font = New System.Drawing.Font("Microsoft Sans Serif", 11.25!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
+        Me.suggestionWord.LineHeight = 20
+        Me.suggestionWord.LineWidth = 70
+        Me.suggestionWord.Location = New System.Drawing.Point(-3, -4)
+        Me.suggestionWord.Margin = New System.Windows.Forms.Padding(4, 4, 4, 4)
+        Me.suggestionWord.MatchedForeColor = System.Drawing.Color.FromArgb(CType(CType(166, Byte), Integer), CType(CType(216, Byte), Integer), CType(CType(255, Byte), Integer))
+        Me.suggestionWord.Name = "suggestionWord"
+        Me.suggestionWord.SelectedIndex = 0
+        Me.suggestionWord.SelectionBackColor = System.Drawing.Color.DarkOrange
+        Me.suggestionWord.Size = New System.Drawing.Size(199, 85)
+        Me.suggestionWord.TabIndex = 1
+        Me.suggestionWord.words = CType(resources.GetObject("suggestionWord.words"), System.Collections.Generic.List(Of String))
         '
         'MainForm
         '
@@ -49,9 +49,10 @@ Partial Class MainForm
         Me.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink
         Me.BackColor = System.Drawing.SystemColors.Info
         Me.CausesValidation = False
-        Me.ClientSize = New System.Drawing.Size(193, 100)
-        Me.Controls.Add(Me.suggestionList)
+        Me.ClientSize = New System.Drawing.Size(219, 94)
+        Me.Controls.Add(Me.suggestionWord)
         Me.FormBorderStyle = System.Windows.Forms.FormBorderStyle.None
+        Me.Margin = New System.Windows.Forms.Padding(4)
         Me.Name = "MainForm"
         Me.ShowInTaskbar = False
         Me.Text = "Form1"
@@ -59,5 +60,5 @@ Partial Class MainForm
         Me.ResumeLayout(False)
 
     End Sub
-    Friend WithEvents suggestionList As SuggestionList
+    Friend WithEvents suggestionWord As SuggestionWord
 End Class
