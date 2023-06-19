@@ -1,4 +1,5 @@
-﻿Imports System.Data.Entity.Migrations
+﻿Imports System.ComponentModel
+Imports System.Data.Entity.Migrations
 Imports System.Linq
 
 Public Module DBManager
@@ -8,18 +9,37 @@ Public Module DBManager
             context.SaveChanges()
             Return True
         End Using
+        Return False
     End Function
 
-    Public Function SearchWord(word As String) As List(Of WordEntity)
+    Public Function SearchWord(word As String, Optional maxCount As Integer = 5) As BindingList(Of WordEntity)
         Using context As New PredictoEntities()
-            Dim result = (From v In context.WordEntities Where v.Content.StartsWith(word) Order By v.Count Descending).Take(5)
-            Dim words As List(Of WordEntity) = New List(Of WordEntity)
+            Dim result
+            If word <> "" Then
+                result = (From v In context.WordEntities Where v.Content.StartsWith(word) Order By v.Count Descending).Take(maxCount)
+            Else
+                result = (From v In context.WordEntities Order By v.Count Descending).Take(maxCount)
+            End If
+            Dim words As BindingList(Of WordEntity) = New BindingList(Of WordEntity)
             For Each value As WordEntity In result
                 words.Add(value)
             Next
             Return words
         End Using
     End Function
+    Public Function DeleteWord(id As String) As Boolean
+        Using context As New PredictoEntities()
+            Dim currentWord = context.WordEntities.Where(Function(item) item.Id = id).FirstOrDefault()
+            If currentWord IsNot Nothing Then
+                context.WordEntities.Remove(currentWord)
+                context.SaveChanges()
+                Return True
+            End If
+        End Using
+        Return False
+    End Function
+
+
     Public Function AddorUpdateWord(word As String, appName As String) As WordEntity
         Using context As New PredictoEntities()
             Dim currentWord = context.WordEntities.Where(Function(item) item.Content = word).FirstOrDefault()
@@ -38,7 +58,6 @@ Public Module DBManager
                 context.WordEntities.Add(currentWord)
             End If
             context.SaveChanges()
-
             Return currentWord
         End Using
     End Function

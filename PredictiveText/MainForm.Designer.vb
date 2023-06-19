@@ -22,9 +22,17 @@ Partial Class MainForm
     'Do not modify it using the code editor.
     <System.Diagnostics.DebuggerStepThrough()>
     Private Sub InitializeComponent()
+        Me.components = New System.ComponentModel.Container()
         Dim resources As System.ComponentModel.ComponentResourceManager = New System.ComponentModel.ComponentResourceManager(GetType(MainForm))
+        Me.NotifyIcon1 = New System.Windows.Forms.NotifyIcon(Me.components)
         Me.suggestionWord = New Predicto.SuggestionWord()
         Me.SuspendLayout()
+        '
+        'NotifyIcon1
+        '
+        Me.NotifyIcon1.Icon = CType(resources.GetObject("NotifyIcon1.Icon"), System.Drawing.Icon)
+        Me.NotifyIcon1.Text = "Predicto"
+        Me.NotifyIcon1.Visible = True
         '
         'suggestionWord
         '
@@ -38,6 +46,7 @@ Partial Class MainForm
         Me.suggestionWord.SelectedIndex = 0
         Me.suggestionWord.SelectionBackColor = System.Drawing.Color.DarkOrange
         Me.suggestionWord.Size = New System.Drawing.Size(199, 85)
+        Me.suggestionWord.StringToFind = "bar"
         Me.suggestionWord.TabIndex = 1
         Me.suggestionWord.words = CType(resources.GetObject("suggestionWord.words"), System.Collections.Generic.List(Of String))
         '
@@ -49,7 +58,7 @@ Partial Class MainForm
         Me.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink
         Me.BackColor = System.Drawing.SystemColors.Info
         Me.CausesValidation = False
-        Me.ClientSize = New System.Drawing.Size(219, 94)
+        Me.ClientSize = New System.Drawing.Size(619, 362)
         Me.Controls.Add(Me.suggestionWord)
         Me.FormBorderStyle = System.Windows.Forms.FormBorderStyle.None
         Me.Margin = New System.Windows.Forms.Padding(4)
@@ -61,4 +70,5 @@ Partial Class MainForm
 
     End Sub
     Friend WithEvents suggestionWord As SuggestionWord
+    Friend WithEvents NotifyIcon1 As NotifyIcon
 End Class

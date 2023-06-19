@@ -12,6 +12,9 @@ Imports SharpHook
 
 Public Class MainForm
 
+
+
+
     Public Sub New()
         InitializeComponent()
         'timer1.Start()  ' Processing events from Hooks involves message queue complexities.
@@ -20,6 +23,13 @@ Public Class MainForm
         If MouseHook Is Nothing Then
             MouseHook = New InputHelper.Hooks.MouseHook
         End If
+
+        'NotifyIcon1.BalloonTipText = "thanks for watching"
+        'NotifyIcon1.BalloonTipTitle = "Subscribe my Channel"
+        'NotifyIcon1.Text = "Notify Icons applicaton"
+        'NotifyIcon1.ShowBalloonTip(2000)
+        createContextMenu()
+
         AddHandler MouseHook.MouseDown, AddressOf MouseHook_MouseDown
         AddHandler MouseHook.MouseWheel, AddressOf MouseHook_MouseDown
         AddHandler KeyboardHook.KeyDown, AddressOf KeyboardHook_KeyDown
@@ -174,11 +184,11 @@ Public Class MainForm
     End Function
 
     Private Declare Auto Function FindWindowEx Lib "user32.dll" (
-ByVal hwndParent As IntPtr,
-ByVal hwndChildAfter As IntPtr,
-ByVal lpszClass As String,
-ByVal lpszWindow As String
-) As IntPtr
+        ByVal hwndParent As IntPtr,
+        ByVal hwndChildAfter As IntPtr,
+        ByVal lpszClass As String,
+        ByVal lpszWindow As String
+    ) As IntPtr
 
     Const WM_SETTEXT As Integer = &HC
     Const WM_KEYDOWN = &H100
@@ -191,7 +201,41 @@ ByVal lpszWindow As String
 
 #Region "Event Handlers "
     Private Sub KeyboardHook_KeyDown(sender As Object, e As InputHelper.EventArgs.KeyboardHookEventArgs)
-        'Console.WriteLine(KeyCodeToChar.GetKeyString(e.KeyCode, e.Modifiers))
+
+
+
+        Dim activeProcess As String = GetActiveProcess()
+
+        If (activeProcess.ToLower().Contains("explorer") Or Equals(activeProcess, String.Empty)) Then
+            ' Dissappear Tooltip
+            Visible = False
+            currentWord = ""
+            Return
+        ElseIf (activeProcess.ToLower().Contains("predicto")) Then
+            Dim activeFormTitle As String = GetActiveWindowTitle()
+            Console.WriteLine("Active WindowTitle is {0}", activeFormTitle)
+            If activeFormTitle = "WordDatabase" Then
+                Visible = False
+                currentWord = ""
+                Return
+            End If
+        Else
+                ' Otherwise Calculate Caret position
+                EvaluateCaretPosition()
+            If caretPosition.X = 0 And caretPosition.Y = 0 Then
+                Visible = False
+            Else
+                ' Adjust ToolTip according to the Caret
+                AdjustUI()
+
+                ' Display current active Process on Tooltip
+                'lblCurrentApp.Text = " You are Currently inside : " & activeProcess
+                Visible = True
+                targetAppName = activeProcess
+            End If
+
+        End If
+
 
         Dim hWnd As IntPtr = GetForegroundWindow()
 
@@ -206,7 +250,7 @@ ByVal lpszWindow As String
 
         If e.KeyCode = Keys.Enter Or e.KeyCode = Keys.Space Then
             If currentWord <> "" Then  ' We assume a word is completed, so we will save it on our db.
-                DBManager.AddorUpdateWord(currentWord.ToLower(), targetAppName)
+                'DBManager.AddorUpdateWord(currentWord.ToLower(), targetAppName)
             End If
             Visible = False
             currentWord = ""
@@ -226,7 +270,8 @@ ByVal lpszWindow As String
 
                 currentWord = currentWord + c
                 suggestionWord.StringToFind = currentWord.ToLower()
-                UpdateSuggestionWordList(300)
+                If currentWord.Length >= 2 Then UpdateSuggestionWordList(100)
+
                 Console.WriteLine("current word is {0}", currentWord)
             Else
                 currentWord = ""
@@ -270,26 +315,7 @@ ByVal lpszWindow As String
         ' 
         ' Get Current active Process
 
-        Dim activeProcess As String = GetActiveProcess()
-        If (activeProcess.ToLower().Contains("explorer") Or Equals(activeProcess, String.Empty)) Then
-            ' Dissappear Tooltip
-            Visible = False
-        Else
-            ' Otherwise Calculate Caret position
-            EvaluateCaretPosition()
-            If caretPosition.X = 0 And caretPosition.Y = 0 Then
-                Visible = False
-            Else
-                ' Adjust ToolTip according to the Caret
-                AdjustUI()
 
-                ' Display current active Process on Tooltip
-                'lblCurrentApp.Text = " You are Currently inside : " & activeProcess
-                Visible = True
-                targetAppName = activeProcess
-            End If
-
-        End If
     End Sub
     Private Sub KeyboardHook_KeyUp(sender As Object, e As InputHelper.EventArgs.KeyboardHookEventArgs)
         Dim hWnd As IntPtr = GetForegroundWindow()
@@ -333,7 +359,7 @@ ByVal lpszWindow As String
                 If currentWord.Length >= 1 Then
                     currentWord = currentWord.Substring(0, currentWord.Length - 1)
                     suggestionWord.StringToFind = currentWord.ToLower()
-                    UpdateSuggestionWordList(300)
+                    If currentWord.Length >= 2 Then UpdateSuggestionWordList(100)
                 End If
             End If
 
@@ -484,11 +510,28 @@ ByVal lpszWindow As String
         ' Get GuiThreadInfo into guiInfo
         GetGUIThreadInfo(0, guiInfo)
     End Sub
+    ''' <summary>
+    ''' Retrieves title of active Window.
+    ''' </summary>
+    ''' <returns>Active Window Title</returns>
+    ''' 
+
+    Private Function GetActiveWindowTitle() As String
+        Const nChars = 256
+        Dim handle = 0
+        Dim Buff As StringBuilder = New StringBuilder(nChars)
+        handle = CInt(GetForegroundWindow())
+        If GetWindowText(handle, Buff, nChars) > 0 Then
+            Return Buff.ToString()
+        End If
+        Return String.Empty
+    End Function
 
     ''' <summary>
     ''' Retrieves name of active Process.
     ''' </summary>
     ''' <returns>Active Process Name</returns>
+    '''
     Private Function GetActiveProcess() As String
         Const nChars = 256
         Dim handle = 0
@@ -508,11 +551,32 @@ ByVal lpszWindow As String
 
     Private Sub MainForm_Load(sender As Object, e As EventArgs) Handles MyBase.Load
         Me.KeyPreview = True
-        'Me.ActiveControl = Nothing
-        'Visible = False
         suggestionWord.StringToFind = ""
     End Sub
+    Public Sub createContextMenu()
+        'create new contextmenu
+        Dim contextMenu As New ContextMenu
+        Dim menuItem As New MenuItem("Exit")
+        Dim menuItem1 As New MenuItem("Edit your DB")
+        contextMenu.MenuItems.Add(menuItem)
+        contextMenu.MenuItems.Add(menuItem1)
 
+        'contextmenu with notifyicon
+        NotifyIcon1.ContextMenu = contextMenu
+
+        'functionality for menuItems
+        AddHandler menuItem.Click, AddressOf Exit_Click
+        AddHandler menuItem1.Click, AddressOf Show_DB_Form
+    End Sub
+
+    Private Sub Show_DB_Form(sender As Object, e As EventArgs)
+        WordDatabase.Activate()
+        WordDatabase.Show()
+    End Sub
+
+    Private Sub Exit_Click(sender As Object, e As EventArgs)
+        Me.Close()
+    End Sub
 
     Private Sub MainForm_KeyPress(sender As Object, e As KeyPressEventArgs) Handles MyBase.KeyPress
         Console.WriteLine("Key Pressed on Form {0}", e.KeyChar)
@@ -521,6 +585,7 @@ ByVal lpszWindow As String
     Private Sub MainForm_KeyDown(sender As Object, e As KeyEventArgs) Handles MyBase.KeyDown
         Console.WriteLine("Key Down on form {0}", e.KeyCode)
     End Sub
+
 
 
 
